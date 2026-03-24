@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nyaya — Court Orders Downloader</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --surface: #161616;
+    --surface2: #1e1e1e;
+    --border: #2a2a2a;
+    --gold: #c9a84c;
+    --gold2: #e8c97a;
+    --text: #e8e4dc;
+    --muted: #6b6560;
+    --red: #8b1a1a;
+    --green: #2d6a4f;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.4;
+  }
+
+  header {
+    padding: 28px 48px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+
+  .logo-mark {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--gold);
+    letter-spacing: -0.5px;
+  }
+
+  .logo-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  .badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--gold);
+    border: 1px solid var(--gold);
+    padding: 4px 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    opacity: 0.6;
+  }
+
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 64px 24px 100px;
+  }
+
+  .hero {
+    margin-bottom: 60px;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  .hero-eyebrow {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--gold);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .hero-eyebrow::before {
+    content: '';
+    width: 32px;
+    height: 1px;
+    background: var(--gold);
+  }
+
+  .hero h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(44px, 7vw, 72px);
+    font-weight: 600;
+    line-height: 1.05;
+    color: var(--text);
+    margin-bottom: 20px;
+  }
+
+  .hero h1 em {
+    font-style: italic;
+    color: var(--gold);
+  }
+
+  .hero p {
+    font-size: 15px;
+    color: var(--muted);
+    line-height: 1.7;
+    max-width: 480px;
+    font-weight: 300;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Form card */
+  .form-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 40px;
+    margin-bottom: 32px;
+    animation: fadeUp 0.6s 0.1s ease both;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .form-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--gold), transparent);
+  }
+
+  .section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--gold);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 28px;
+  }
+
+  @media (max-width: 600px) {
+    .fields { grid-template-columns: 1fr; }
+    header { padding: 20px 24px; }
+    .form-card { padding: 24px; }
+  }
+
+  .field { display: flex; flex-direction: column; gap: 8px; }
+
+  .field label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .field input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    padding: 13px 16px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .field input:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(201,168,76,0.08);
+  }
+
+  .field input::placeholder { color: #3a3a3a; }
+
+  .field .hint {
+    font-size: 11px;
+    color: #3a3a3a;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 15px 36px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+  }
+
+  .btn-gold {
+    background: var(--gold);
+    color: #0d0d0d;
+  }
+
+  .btn-gold:hover { background: var(--gold2); transform: translateY(-1px); }
+  .btn-gold:active { transform: translateY(0); }
+  .btn-gold:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-outline {
+    background: transparent;
+    color: var(--gold);
+    border: 1px solid var(--gold);
+  }
+
+  .btn-outline:hover {
+    background: rgba(201,168,76,0.08);
+    transform: translateY(-1px);
+  }
+
+  /* Status */
+  .status {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    margin-top: 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+  }
+
+  .status.show { display: flex; }
+  .status-loading { background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.2); color: var(--gold); }
+  .status-error   { background: rgba(139,26,26,0.15);  border: 1px solid rgba(139,26,26,0.4);  color: #e07070; }
+  .status-info    { background: rgba(45,106,79,0.12);  border: 1px solid rgba(45,106,79,0.3);  color: #6bcf9e; }
+
+  .spinner {
+    width: 14px; height: 14px;
+    border: 1.5px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Results */
+  .results {
+    display: none;
+    animation: fadeUp 0.4s ease both;
+  }
+  .results.show { display: block; }
+
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .results-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .results-title span { color: var(--gold); }
+
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+
+  thead tr {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  th {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 400;
+  }
+
+  td {
+    padding: 13px 16px;
+    border-bottom: 1px solid rgba(42,42,42,0.6);
+    font-size: 13px;
+    vertical-align: middle;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(201,168,76,0.03); }
+
+  .td-num {
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    font-size: 11px;
+    width: 48px;
+  }
+
+  .td-date {
+    font-family: 'DM Mono', monospace;
+    color: var(--gold);
+    font-size: 12px;
+    width: 120px;
+    white-space: nowrap;
+  }
+
+  .td-label { color: var(--text); }
+
+  .td-link a {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--gold);
+    text-decoration: none;
+    letter-spacing: 1px;
+    border-bottom: 1px dotted rgba(201,168,76,0.4);
+    transition: border-color 0.2s;
+  }
+
+  .td-link a:hover { border-bottom-color: var(--gold); }
+
+  /* Download progress */
+  .download-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .progress-block {
+    flex: 1;
+    min-width: 200px;
+    display: none;
+  }
+
+  .progress-meta {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .progress-track {
+    height: 3px;
+    background: var(--border);
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold), var(--gold2));
+    transition: width 0.4s ease;
+    width: 0%;
+  }
+
+  footer {
+    text-align: center;
+    padding: 40px 24px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: #2a2a2a;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    border-top: 1px solid var(--border);
+  }
+
+  /* CORS warning */
+  .cors-help {
+    display: none;
+    background: rgba(139,26,26,0.1);
+    border: 1px solid rgba(139,26,26,0.3);
+    padding: 20px 24px;
+    margin-top: 16px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #e07070;
+  }
+
+  .cors-help.show { display: block; }
+  .cors-help strong { color: var(--text); display: block; margin-bottom: 8px; font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 1px; }
+  .cors-help ol { padding-left: 20px; color: var(--muted); }
+  .cors-help ol li { margin-bottom: 6px; }
+  .cors-help code { font-family: 'DM Mono', monospace; color: var(--gold); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">⚖ Nyaya</div>
+    <div class="logo-tag">Court Orders</div>
+  </div>
+  <div class="badge">Delhi District Courts</div>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="hero-eyebrow">Legal Research Tool</div>
+    <h1>Download Court<br>Orders <em>Instantly</em></h1>
+    <p>Enter any Delhi District Court URL and case number. All order sheets fetched and downloaded as a ZIP, sorted by date.</p>
+  </div>
+
+  <div class="form-card">
+    <div class="section-label">Case Details</div>
+    <div class="fields">
+      <div class="field">
+        <label>Court Website URL</label>
+        <input type="text" id="courtUrl" placeholder="https://northdelhi.dcourts.gov.in" />
+        <div class="hint">Any Delhi district court URL</div>
+      </div>
+      <div class="field">
+        <label>Case Number</label>
+        <input type="text" id="caseNumber" placeholder="CS DJ/58585/2016" />
+        <div class="hint">e.g. CS SCJ 714/2024</div>
+      </div>
+    </div>
+    <button class="btn btn-gold" id="searchBtn" onclick="fetchOrders()">
+      Search Orders
+    </button>
+
+    <div class="status status-loading" id="statusLoading">
+      <div class="spinner"></div>
+      <span id="loadingText">Searching for orders...</span>
+    </div>
+    <div class="status status-error" id="statusError">
+      <span>⚠</span>
+      <span id="errorText"></span>
+    </div>
+
+    <div class="cors-help" id="corsHelp">
+      <strong>Browser Security Block (CORS)</strong>
+      The court website is blocking direct browser requests for security reasons. To work around this, open the court website in your browser first, search for the case, then right-click any order link and copy the URL. You can then open each PDF directly.<br><br>
+      <strong>Alternative — Run Locally</strong>
+      <ol>
+        <li>Download <code>server.py</code> and run it on your Mac</li>
+        <li>Open <code>http://localhost:5000</code> — this version works fully</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <div class="results-header">
+      <div class="results-title">Found <span id="orderCount">0</span> Orders</div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Date</th>
+            <th>Description</th>
+            <th>View</th>
+          </tr>
+        </thead>
+        <tbody id="ordersBody"></tbody>
+      </table>
+    </div>
+
+    <div class="download-section">
+      <button class="btn btn-gold" id="downloadBtn" onclick="downloadAll()">
+        ↓ Download All as ZIP
+      </button>
+      <div class="progress-block" id="progressBlock">
+        <div class="progress-meta">
+          <span id="progressText">Downloading...</span>
+          <span id="progressCount">0/0</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="status status-info" id="statusDone" style="margin-top:16px;">
+      <span>✓</span>
+      <span id="doneText"></span>
+    </div>
+  </div>
+</main>
+
+<footer>Nyaya &nbsp;·&nbsp; Delhi District Courts &nbsp;·&nbsp; For Legal Use Only</footer>
+
+<script>
+  let allOrders = [];
+  let courtUrl = '';
+  let caseNumber = '';
+
+  function parseCase(raw) {
+    raw = raw.trim();
+    let m = raw.match(/^(.+?)\s+(\d+)[\/\s](\d{4})$/);
+    if (m) return { type: m[1].trim(), no: m[2], year: m[3] };
+    m = raw.match(/^(.+?)\/(\d+)\/(\d{4})$/);
+    if (m) return { type: m[1].trim(), no: m[2], year: m[3] };
+    throw new Error('Could not parse case number. Try format: CS DJ/58585/2016');
+  }
+
+  function decodeOrder(href) {
+    try {
+      const qs = href.split('input_strings=')[1]?.split('&')[0];
+      if (!qs) return null;
+      const decoded = JSON.parse(atob(qs));
+      return decoded;
+    } catch { return null; }
+  }
+
+  async function fetchOrders() {
+    courtUrl = document.getElementById('courtUrl').value.trim().replace(/\/$/, '');
+    caseNumber = document.getElementById('caseNumber').value.trim();
+
+    if (!courtUrl || !caseNumber) {
+      showError('Please fill in both fields.');
+      return;
+    }
+
+    let parsed;
+    try { parsed = parseCase(caseNumber); }
+    catch (e) { showError(e.message); return; }
+
+    setLoading(true, 'Fetching orders from court website...');
+    hideError();
+    hideCors();
+    document.getElementById('results').classList.remove('show');
+    document.getElementById('statusDone').classList.remove('show');
+    allOrders = [];
+
+    const searchUrl = `${courtUrl}/court-orders-search-by-case-number/`;
+    const ajaxUrl   = `${courtUrl}/wp-admin/admin-ajax.php`;
+
+    try {
+      // Step 1: GET the search page for any nonce/hidden fields
+      let formData = new FormData();
+      formData.append('action', 'get_case_orders');
+      formData.append('case_type', parsed.type);
+      formData.append('case_no', parsed.no);
+      formData.append('case_year', parsed.year);
+      formData.append('es_ajax_request', '1');
+
+      setLoading(true, 'Contacting court server...');
+      const resp = await fetch(ajaxUrl, {
+        method: 'POST',
+        body: formData,
+        mode: 'cors',
+      });
+
+      const html = await resp.text();
+      const orders = parseOrdersFromHtml(html, courtUrl);
+
+      if (orders.length === 0) {
+        // Try searching the main page
+        const resp2 = await fetch(searchUrl, { mode: 'cors' });
+        const html2 = await resp2.text();
+        const orders2 = parseOrdersFromHtml(html2, courtUrl);
+        if (orders2.length > 0) {
+          renderOrders(orders2);
+        } else {
+          showError('No orders found. Please check the court URL and case number.');
+        }
+      } else {
+        renderOrders(orders);
+      }
+
+    } catch (e) {
+      if (e.name === 'TypeError' || e.message.includes('fetch') || e.message.includes('CORS') || e.message.includes('Failed')) {
+        showError('The court website blocked the request (CORS restriction).');
+        showCors();
+      } else {
+        showError('Error: ' + e.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function parseOrdersFromHtml(html, base) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const orders = [];
+    const seen = new Set();
+
+    doc.querySelectorAll('a[href]').forEach(a => {
+      const href = a.getAttribute('href');
+      if (!href || !href.includes('get_order_pdf') || !href.includes('input_strings=')) return;
+      if (seen.has(href)) return;
+      seen.add(href);
+
+      const full = href.startsWith('http') ? href : base + href;
+      const info = decodeOrder(href);
+      orders.push({
+        label: a.textContent.trim() || 'Order',
+        url: full,
+        date: info?.order_date || '0000-00-00',
+        order_no: info?.order_no || 0,
+      });
+    });
+
+    orders.sort((a, b) => a.date.localeCompare(b.date));
+    return orders;
+  }
+
+  function renderOrders(orders) {
+    allOrders = orders;
+    document.getElementById('orderCount').textContent = orders.length;
+    const tbody = document.getElementById('ordersBody');
+    tbody.innerHTML = '';
+
+    orders.forEach((o, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="td-num">${String(i+1).padStart(3,'0')}</td>
+        <td class="td-date">${o.date}</td>
+        <td class="td-label">${o.label}</td>
+        <td class="td-link"><a href="${o.url}" target="_blank">Open ↗</a></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('results').classList.add('show');
+  }
+
+  async function downloadAll() {
+    if (!allOrders.length) return;
+
+    const btn = document.getElementById('downloadBtn');
+    const block = document.getElementById('progressBlock');
+    const fill = document.getElementById('progressFill');
+    const pText = document.getElementById('progressText');
+    const pCount = document.getElementById('progressCount');
+
+    btn.disabled = true;
+    btn.textContent = 'Downloading...';
+    block.style.display = 'block';
+    document.getElementById('statusDone').classList.remove('show');
+
+    const zip = new JSZip();
+    let done = 0;
+    let failed = 0;
+
+    for (let i = 0; i < allOrders.length; i++) {
+      const o = allOrders[i];
+      const safe = o.label.replace(/[^a-zA-Z0-9]/g, '_');
+      const filename = `${String(i+1).padStart(3,'0')}_${o.date}_${safe}.pdf`;
+
+      pText.textContent = `Downloading ${i+1} of ${allOrders.length}...`;
+      pCount.textContent = `${i+1}/${allOrders.length}`;
+      fill.style.width = `${Math.round(((i) / allOrders.length) * 100)}%`;
+
+      try {
+        const resp = await fetch(o.url, { mode: 'cors' });
+        const blob = await resp.blob();
+        if (blob.size > 0) {
+          zip.file(filename, blob);
+          done++;
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
+      }
+
+      await new Promise(r => setTimeout(r, 800));
+    }
+
+    fill.style.width = '100%';
+    pText.textContent = 'Creating ZIP file...';
+
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `court_orders_${caseNumber.replace(/[^a-zA-Z0-9]/g,'_')}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    btn.disabled = false;
+    btn.textContent = '↓ Download All as ZIP';
+    block.style.display = 'none';
+
+    const doneEl = document.getElementById('statusDone');
+    document.getElementById('doneText').textContent =
+      `Downloaded ${done} files${failed ? ` (${failed} failed — open them manually via the links above)` : ''}. Check your Downloads folder!`;
+    doneEl.classList.add('show');
+  }
+
+  function setLoading(on, text='') {
+    const el = document.getElementById('statusLoading');
+    document.getElementById('loadingText').textContent = text;
+    el.classList.toggle('show', on);
+    document.getElementById('searchBtn').disabled = on;
+    document.getElementById('searchBtn').textContent = on ? 'Searching...' : 'Search Orders';
+  }
+
+  function showError(msg) {
+    document.getElementById('errorText').textContent = msg;
+    document.getElementById('statusError').classList.add('show');
+  }
+
+  function hideError() { document.getElementById('statusError').classList.remove('show'); }
+  function showCors()  { document.getElementById('corsHelp').classList.add('show'); }
+  function hideCors()  { document.getElementById('corsHelp').classList.remove('show'); }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') fetchOrders();
+  });
+</script>
+</body>
+</html>
